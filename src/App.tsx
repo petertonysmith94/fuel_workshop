@@ -1,26 +1,105 @@
-import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import { useEffect, useState } from "react";
+import "./App.css";
+import { CounterContractAbi__factory } from "./contracts";
+
+const CONTRACT_ID: string = "0x2ec59d8d15a14bae4b428d6e10a4d54775b107313373508f80c4ec5b75a01049"
 
 function App() {
+  const [connected, setConnected] = useState<boolean>(false);
+  const [account, setAccount] = useState<string>("");
+  const [counter, setCounter] = useState<number>(0);
+  const [loaded, setLoaded] = useState(false);
+ 
+  useEffect(() => {
+    setTimeout(() => {
+      checkConnection();
+      setLoaded(true);
+    }, 200)
+  }, [connected])
+ 
+  async function connect() {
+    if (window.fuel) {
+      try {
+        await window.fuel.connect();
+        const [account] = await window.fuel.accounts();
+        console.log("account: ", account);
+        setAccount(account);
+        setConnected(true);
+      } catch (err) {
+        console.log("error connecting: ", err);
+      }
+    }
+  }
+ 
+  async function checkConnection() {
+    if (window.fuel) {
+      const isConnected = await window.fuel.isConnected();
+      if (isConnected) {
+        const [account] = await window.fuel.accounts();
+        setAccount(account);
+        setConnected(true);
+      }
+    }
+  }
+ 
+  async function getCount() {
+    if (window.fuel) {
+      const wallet = await window.fuel.getWallet(account);
+      const contract = CounterContractAbi__factory.connect(CONTRACT_ID, wallet);
+      const { value } = await contract.functions.count().simulate();
+      setCounter(value.toNumber());
+    }
+  }
+ 
+  async function increment() {
+    if (window.fuel) {
+      const wallet = await window.fuel.getWallet(account);
+      const contract = CounterContractAbi__factory.connect(CONTRACT_ID, wallet);
+      // Creates a transactions to call the increment function
+      // because it creates a TX and updates the contract state this requires the wallet to have enough coins to cover the costs and also to sign the Transaction
+      try {
+        await contract.functions.increment().txParams({ gasPrice: 1 }).call();
+        getCount();
+      } catch (err) {
+        console.log("error sending transaction...", err);
+      }
+    }
+  }
+ 
+  if (!loaded) return null
+ 
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <>
+      <div className="App">
+        {
+          connected ? (
+            <>
+              <h3>Counter: {counter}</h3>
+              <button style={buttonStyle} onClick={increment}>
+                Increment
+              </button>
+            </>
+          ) : (
+            <button style={buttonStyle} onClick={connect}>Connect</button>
+          )
+        }
+      </div>
+    </>
   );
 }
-
+ 
 export default App;
+ 
+const buttonStyle = {
+  borderRadius: "48px",
+  marginTop: "10px",
+  backgroundColor: "#03ffc8",
+  fontSize: "20px",
+  fontWeight: "600",
+  color: "rgba(0, 0, 0, .88)",
+  border: "none",
+  outline: "none",
+  height: "60px",
+  width: "400px",
+  cursor: "pointer"
+}
